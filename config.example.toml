@@ -1,0 +1,5 @@
+# Copy to config.toml (gitignored) to prefill the UI. Both are optional.
+# Your ComfyUI address on your home network. Only GET requests are sent to it.
+comfy_url = "http://127.0.0.1:8188"
+# Or a local folder of LoRA .safetensors files.
+lora_folder = ""

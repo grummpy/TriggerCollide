@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=TriggerCollide
+GenericName=LoRA trigger collision checker
+Comment=Find LoRA trigger words that overlap or clash before stacking them
+Exec=bash -c 'cd "$(dirname "$1")" && exec ./launch.sh' bash %k
+Icon=assets/icon.png
+Terminal=true
+Categories=Graphics;Utility;
+StartupNotify=true
