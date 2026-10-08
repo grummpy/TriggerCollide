@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TriggerCollide</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <img src="/static/icon.svg" alt="" class="logo">
+  <div>
+    <h1>TriggerCollide</h1>
+    <p class="sub">Catch LoRA trigger words that overlap or clash before you stack them.</p>
+  </div>
+  <span class="badge" title="TriggerCollide only sends GET requests to ComfyUI and never queues a prompt">Read-only · no GPU jobs</span>
+</header>
+
+<section class="panel source">
+  <div class="seg" role="tablist">
+    <button class="seg-btn active" data-src="demo">Demo library</button>
+    <button class="seg-btn" data-src="folder">LoRA folder</button>
+    <button class="seg-btn" data-src="comfy">ComfyUI</button>
+  </div>
+  <div class="src-pane" data-pane="demo">
+    <p>Eleven synthetic LoRA headers with a few built-in clashes. Good for a first look.</p>
+    <button id="scan-demo" class="primary">Scan demo library</button>
+  </div>
+  <div class="src-pane hidden" data-pane="folder">
+    <label>Folder with .safetensors LoRAs <input id="folder-path" placeholder="/Users/you/ComfyUI/models/loras"></label>
+    <label class="check"><input type="checkbox" id="folder-recursive" checked> Include subfolders</label>
+    <p class="hint">Only each file's small JSON header is read. Model weights are never loaded.</p>
+    <button id="scan-folder" class="primary">Scan folder</button>
+  </div>
+  <div class="src-pane hidden" data-pane="comfy">
+    <label>ComfyUI address <input id="comfy-url" placeholder="http://127.0.0.1:8188"></label>
+    <p class="hint">Uses GET /system_stats, /models/loras and /view_metadata only. Nothing is queued.</p>
+    <button id="scan-comfy" class="primary">Scan ComfyUI</button>
+  </div>
+  <label class="check"><input type="checkbox" id="all-families"> Also compare LoRAs from different base models</label>
+  <div id="status" class="status" aria-live="polite"></div>
+</section>
+
+<section id="summary" class="cards hidden"></section>
+
+<nav class="tabs hidden" id="tabs">
+  <button class="tab active" data-tab="collisions">Collisions</button>
+  <button class="tab" data-tab="library">Library</button>
+  <button class="tab" data-tab="workflow">Workflow check</button>
+  <span class="spacer"></span>
+  <a id="dl-csv" class="link">Download CSV</a>
+  <a id="dl-json" class="link">Download JSON</a>
+</nav>
+
+<section class="tab-pane panel hidden" data-pane="collisions">
+  <div class="split">
+    <div>
+      <h2>Collision heatmap</h2>
+      <p class="hint">LoRAs with the most clashes. Hover a cell for details.</p>
+      <div id="heatmap"></div>
+    </div>
+    <div>
+      <h2>Worst pairs</h2>
+      <input id="col-filter" placeholder="Filter by name or word">
+      <ol id="col-list" class="col-list"></ol>
+    </div>
+  </div>
+</section>
+
+<section class="tab-pane panel hidden" data-pane="library">
+  <input id="lib-filter" placeholder="Filter by name, trigger or base model">
+  <div class="table-wrap"><table id="lib-table">
+    <thead><tr><th>LoRA</th><th>Base</th><th>Triggers</th><th>Top tags</th><th>Clashes</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="tab-pane panel hidden" data-pane="workflow">
+  <p>Paste a ComfyUI workflow (API or regular save format). It is read here and never sent to ComfyUI.</p>
+  <div class="row">
+    <input type="file" id="wf-file" accept=".json,application/json">
+    <button id="wf-demo">Load demo workflow</button>
+    <button id="wf-check" class="primary">Check workflow</button>
+  </div>
+  <textarea id="wf-text" rows="10" spellcheck="false" placeholder='{"10": {"class_type": "LoraLoader", ...}}'></textarea>
+  <div id="wf-result"></div>
+</section>
+
+<footer>TriggerCollide <span id="version"></span> · runs on 127.0.0.1 · files stay on this computer</footer>
+<div id="tip" class="tip hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
