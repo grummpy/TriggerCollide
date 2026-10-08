@@ -31,8 +31,8 @@ def serve(*, port: int | None = None, open_browser: bool = True, data_dir=None) 
     chosen = pick_port(DEFAULT_PORT if port is None else port)
     app = create_app(data_dir=data_dir)
     url = f"http://{HOST}:{chosen}/"
-    print(f"TriggerCollide is running at {url}")
-    print("It only reads LoRA headers and never queues anything in ComfyUI. Press Ctrl+C to stop.")
+    print(f"TriggerCollide is running at {url}", flush=True)
+    print("It only reads LoRA headers and never queues anything in ComfyUI. Press Ctrl+C to stop.", flush=True)
     if open_browser:
         threading.Timer(0.6, lambda: _open(url)).start()
     server = make_bound_server(app, chosen)
