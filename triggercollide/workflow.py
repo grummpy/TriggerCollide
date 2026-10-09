@@ -76,6 +76,7 @@ def extract_stack(workflow: dict) -> tuple[list[StackedLora], list[dict], str]:
 def _extract_api(workflow: dict) -> tuple[list[StackedLora], list[dict]]:
     stacked: list[StackedLora] = []
     checkpoints: list[dict] = []
+    connected = _connected_api_nodes(workflow)
     for node_id, node in sorted(workflow.items(), key=lambda kv: str(kv[0])):
         if not isinstance(node, dict):
             continue
@@ -88,8 +89,49 @@ def _extract_api(workflow: dict) -> tuple[list[StackedLora], list[dict]]:
         for key in ("ckpt_name", "unet_name"):
             if isinstance(inputs.get(key), str):
                 checkpoints.append({"node": str(node_id), "name": inputs[key], "family": _family_from_text(inputs[key])})
-        stacked.extend(_loras_from_inputs(str(node_id), ctype, inputs, node_enabled))
+        if str(node_id) in connected:
+            stacked.extend(_loras_from_inputs(str(node_id), ctype, inputs, node_enabled))
     return stacked, checkpoints
+
+
+def _connected_api_nodes(workflow: dict) -> set[str]:
+    """Return nodes that feed a non-loader terminal node.
+
+    Saved API workflows can retain experimental LoRA loaders that are no longer
+    wired into a sampler.  They must not affect the reported stack or weights.
+    """
+    dependencies: dict[str, set[str]] = {}
+    referenced: set[str] = set()
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        refs = {
+            str(value[0])
+            for value in (node.get("inputs") or {}).values()
+            if isinstance(value, list) and value and isinstance(value[0], (str, int))
+        }
+        dependencies[str(node_id)] = refs
+        referenced.update(refs)
+    terminals = [
+        node_id
+        for node_id, node in workflow.items()
+        if str(node_id) not in referenced
+        and isinstance(node, dict)
+        and "lora" not in str(node.get("class_type", "")).lower()
+    ]
+    # A clipped workflow fragment has no execution terminal; retain its
+    # loaders rather than claiming it contains none.
+    if not terminals:
+        return {str(node_id) for node_id, node in workflow.items() if isinstance(node, dict)}
+    connected: set[str] = set()
+    pending = [str(node_id) for node_id in terminals]
+    while pending:
+        node_id = pending.pop()
+        if node_id in connected:
+            continue
+        connected.add(node_id)
+        pending.extend(dependencies.get(node_id, ()))
+    return connected
 
 
 def _loras_from_inputs(node_id: str, ctype: str, inputs: dict, node_enabled: bool) -> list[StackedLora]:
@@ -129,6 +171,7 @@ def _extract_ui(workflow: dict) -> tuple[list[StackedLora], list[dict]]:
     """Best effort for the UI-format workflow (the one ComfyUI saves by default)."""
     stacked: list[StackedLora] = []
     checkpoints: list[dict] = []
+    connected = _connected_ui_nodes(workflow)
     for node in workflow.get("nodes", []):
         if not isinstance(node, dict):
             continue
@@ -136,6 +179,8 @@ def _extract_ui(workflow: dict) -> tuple[list[StackedLora], list[dict]]:
         widgets = node.get("widgets_values")
         node_id = str(node.get("id", ""))
         enabled = node.get("mode", 0) not in (2, 4)
+        if node_id not in connected:
+            continue
         if isinstance(widgets, dict):
             stacked.extend(_loras_from_inputs(node_id, ctype, widgets, enabled))
             continue
@@ -155,6 +200,35 @@ def _extract_ui(workflow: dict) -> tuple[list[StackedLora], list[dict]]:
                 clip = _num(rest[1]) if len(rest) > 1 else None
                 stacked.append(StackedLora(node_id, ctype, value, strength, clip, enabled and strength != 0))
     return stacked, checkpoints
+
+
+def _connected_ui_nodes(workflow: dict) -> set[str]:
+    nodes = {str(node.get("id")): node for node in workflow.get("nodes", []) if isinstance(node, dict)}
+    if not workflow.get("links"):
+        return set(nodes)
+    dependencies = {node_id: set() for node_id in nodes}
+    referenced: set[str] = set()
+    for link in workflow.get("links") or []:
+        if isinstance(link, list) and len(link) >= 4:
+            source, target = str(link[1]), str(link[3])
+            if source in nodes and target in nodes:
+                dependencies[target].add(source)
+                referenced.add(source)
+    terminals = [
+        node_id
+        for node_id, node in nodes.items()
+        if node_id not in referenced and "lora" not in str(node.get("type", "")).lower()
+    ]
+    if not terminals:
+        return set(nodes)
+    connected: set[str] = set()
+    pending = terminals[:]
+    while pending:
+        node_id = pending.pop()
+        if node_id not in connected:
+            connected.add(node_id)
+            pending.extend(dependencies[node_id])
+    return connected
 
 
 def _key(name: str) -> str:

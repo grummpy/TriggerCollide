@@ -195,9 +195,9 @@ def family_from_tensors(names: list[str], shapes: dict[str, list[int]] | None = 
                 return CONTEXT_DIMS[shape[-1]], f"cross-attention width {shape[-1]}"
     if "lora_te2_" in joined or "text_encoder_2" in joined:
         return "sdxl", "second text encoder"
-    if "lora_unet_input_blocks" in joined or "lora_unet_output_blocks" in joined:
-        return "sdxl", "SDXL block names"
-    if "lora_unet_" in joined or "lora_te_" in joined or "lora_te1_" in joined:
+    # lora_unet_ is shared by multiple SD families, so it must not override
+    # explicit metadata. Text-encoder keys remain useful SD 1.x evidence.
+    if "lora_te_" in joined or "lora_te1_" in joined:
         return "sd15", "SD 1.x block names"
     return "unknown", ""
 
@@ -242,9 +242,10 @@ def inferred_triggers(tags: dict[str, int], limit: int = 2) -> list[Trigger]:
     if top < 3:
         return []
     ranked = sorted(tags.items(), key=lambda item: (-item[1], item[0]))
-    picked = [tag for tag, count in ranked if count >= top * 0.97][:limit]
-    if len(picked) >= 6:
+    candidates = [tag for tag, count in ranked if count >= top * 0.97]
+    if len(candidates) >= 6:
         return []
+    picked = candidates[:limit]
     return [Trigger(tag, tag, "inferred (top tag)") for tag in picked]
 
 

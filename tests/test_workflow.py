@@ -55,6 +55,26 @@ def test_missing_lora_and_no_lora_cases(demo_dir):
     assert empty.issues[0]["kind"] == "no_loras"
 
 
+def test_disconnected_loader_is_not_counted():
+    wf = {
+        "1": {"class_type": "LoraLoader", "inputs": {"lora_name": "used.safetensors", "strength_model": 1}},
+        "2": {"class_type": "LoraLoader", "inputs": {"lora_name": "unused.safetensors", "strength_model": 1}},
+        "3": {"class_type": "KSampler", "inputs": {"model": ["1", 0]}},
+    }
+    stacked, _, _ = extract_stack(wf)
+    assert [item.lora for item in stacked] == ["used.safetensors"]
+
+
+def test_disconnected_ui_loader_is_not_counted():
+    wf = {"nodes": [
+        {"id": 1, "type": "LoraLoader", "widgets_values": ["used.safetensors", 1.0, 1.0]},
+        {"id": 2, "type": "LoraLoader", "widgets_values": ["unused.safetensors", 1.0, 1.0]},
+        {"id": 3, "type": "KSampler", "widgets_values": []},
+    ], "links": [[1, 1, 0, 3, 0, "MODEL"]]}
+    stacked, _, _ = extract_stack(wf)
+    assert [item.lora for item in stacked] == ["used.safetensors"]
+
+
 def test_same_file_name_in_two_folders_is_matched_by_path(tmp_path):
     from triggercollide.safetensors_meta import write_safetensors
 

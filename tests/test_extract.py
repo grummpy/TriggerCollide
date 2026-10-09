@@ -68,13 +68,24 @@ def test_cross_attention_width_identifies_sdxl_with_diffusers_names():
     name = "lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn2_to_k.lora_down.weight"
     assert family_from_tensors([name], {name: [8, 2048]}) == ("sdxl", "cross-attention width 2048")
     assert family_from_tensors([name], {name: [8, 768]})[0] == "sd15"
-    assert family_from_tensors([name], {})[0] == "sd15"
+    assert family_from_tensors([name], {})[0] == "unknown"
+
+
+def test_generic_unet_tensor_keys_do_not_override_sdxl_metadata():
+    names = ["lora_unet_down_blocks_1_attentions_0.to_q.lora_down.weight"]
+    assert detect_family({"ss_base_model_version": "sdxl_base_1.0"}, names)[0] == "sdxl"
 
 
 def test_generic_caption_tags_are_not_inferred_as_triggers():
     meta = {"ss_tag_frequency": json.dumps({"img": {"solo": 40, "1girl": 40, "blorptoon": 39, "hat": 3}})}
     rec = build_record("x.safetensors", meta)
     assert [t.norm for t in rec.triggers] == ["blorptoon"]
+
+
+def test_six_near_tied_tags_are_too_ambiguous_to_infer():
+    meta = {"ss_tag_frequency": json.dumps({"img": {f"token{i}": 100 for i in range(6)}})}
+    rec = build_record("x.safetensors", meta)
+    assert rec.triggers == []
 
 
 def test_hash_named_dataset_folders_are_not_triggers():
