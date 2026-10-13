@@ -83,3 +83,16 @@ def test_inferred_triggers_count_less_than_explicit():
     scores = {(x.a, x.b): x.score for x in result["collisions"]}
     assert scores[(0, 2)] == 1.0
     assert scores[(0, 1)] < 1.0
+
+
+def test_collision_findings_keep_evidence_source_and_provisional_confidence():
+    a = _rec("a", ["zork"])
+    b = _rec("b", [])
+    b.triggers = [Trigger("zork", "zork", "inferred (top tag)")]
+    finding = analyze([a, b])["collisions"][0].findings[0]
+    assert finding.confidence == "provisional"
+    assert finding.rationale.startswith("At least one trigger")
+    assert finding.evidence == [
+        {"side": "a", "term": "zork", "source": "test"},
+        {"side": "b", "term": "zork", "source": "inferred (top tag)"},
+    ]
