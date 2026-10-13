@@ -35,6 +35,12 @@ class Finding:
     detail: str
     a: str = ""
     b: str = ""
+    # A collision is a preflight hint, not a claim that two models will fail
+    # together.  Keep the terms and their extraction origins with the finding
+    # so JSON/CSV consumers do not have to infer certainty from prose.
+    confidence: str = "direct"
+    rationale: str = ""
+    evidence: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -173,19 +179,27 @@ def compare_pair(ra, rb, top_a, top_b, tags_a, tags_b):
     score = 0.0
     norms_a = {t.norm for t in ra.triggers}
     norms_b = {t.norm for t in rb.triggers}
+    sources_a = _trigger_sources(ra)
+    sources_b = _trigger_sources(rb)
     guessed = {t.norm for t in ra.triggers + rb.triggers if t.source.startswith("inferred")}
     exact = norms_a & norms_b
     for value in sorted(exact):
         if value in guessed:
-            findings.append(Finding("exact", f'Both seem to use "{value}" (guessed from training tags)', value, value))
+            findings.append(_finding("exact", f'Both seem to use "{value}" (guessed from training tags)', value, value,
+                                     sources_a, sources_b, "provisional",
+                                     "At least one trigger was inferred from top training tags; verify before use."))
             score += WEIGHTS["exact"] * INFERRED_FACTOR
         else:
-            findings.append(Finding("exact", f'Both use the trigger "{value}"', value, value))
+            findings.append(_finding("exact", f'Both use the trigger "{value}"', value, value, sources_a, sources_b,
+                                     "direct", "Matching declared trigger phrases contribute 1.0 to the score."))
             score += WEIGHTS["exact"]
     for x in sorted(norms_a - exact):
         for y in sorted(norms_b - exact):
             if len(x) >= 3 and len(y) >= 3 and (x in y or y in x):
-                findings.append(Finding("substring", f'"{x}" and "{y}" contain each other', x, y))
+                confidence = _confidence_for(x, y, sources_a, sources_b)
+                findings.append(_finding("substring", f'"{x}" and "{y}" contain each other', x, y, sources_a,
+                                         sources_b, confidence,
+                                         "A character-level overlap is heuristic and can be a false positive."))
                 score += WEIGHTS["substring"]
             else:
                 tx, ty = tokens(x), tokens(y)
@@ -193,23 +207,57 @@ def compare_pair(ra, rb, top_a, top_b, tags_a, tags_b):
                     jac = len(tx & ty) / len(tx | ty)
                     if jac >= 0.5:
                         shared = ", ".join(sorted(tx & ty))
-                        findings.append(Finding("token_overlap", f'"{x}" and "{y}" share words: {shared}', x, y))
+                        confidence = _confidence_for(x, y, sources_a, sources_b)
+                        findings.append(_finding("token_overlap", f'"{x}" and "{y}" share words: {shared}', x, y,
+                                                 sources_a, sources_b, confidence,
+                                                 "Shared words are a heuristic, not proof of the same trigger."))
                         score += WEIGHTS["token_overlap"] * jac
     for x in sorted(norms_a - exact):
         if x in tags_b:
-            findings.append(Finding("cross_tag", f'Trigger "{x}" of {ra.name} is a training tag of {rb.name}', x, ""))
+            confidence = "provisional" if x in guessed else "heuristic"
+            findings.append(_finding("cross_tag", f'Trigger "{x}" of {ra.name} is a training tag of {rb.name}', x,
+                                     "", sources_a, sources_b, confidence,
+                                     "A trigger matching another model's training tag needs review."))
             score += WEIGHTS["cross_tag"] * (INFERRED_FACTOR if x in guessed else 1.0)
     for y in sorted(norms_b - exact):
         if y in tags_a:
-            findings.append(Finding("cross_tag", f'Trigger "{y}" of {rb.name} is a training tag of {ra.name}', "", y))
+            confidence = "provisional" if y in guessed else "heuristic"
+            findings.append(_finding("cross_tag", f'Trigger "{y}" of {rb.name} is a training tag of {ra.name}', "", y,
+                                     sources_a, sources_b, confidence,
+                                     "A trigger matching another model's training tag needs review."))
             score += WEIGHTS["cross_tag"] * (INFERRED_FACTOR if y in guessed else 1.0)
     shared_tags = sorted((top_a & top_b) - norms_a - norms_b)
     if shared_tags:
         score += min(SHARED_TAG_CAP, WEIGHTS["shared_tag"] * len(shared_tags))
-        findings.append(Finding("shared_tags", f"{len(shared_tags)} distinctive training tags in common"))
+        findings.append(Finding("shared_tags", f"{len(shared_tags)} distinctive training tags in common",
+                                confidence="heuristic",
+                                rationale="Shared training tags are a low-weight heuristic, not trigger evidence.",
+                                evidence=[{"side": "both", "term": tag, "source": "training tag"}
+                                          for tag in shared_tags[:20]]))
     if not findings:
         return None
     return score, findings, shared_tags[:20]
+
+
+def _trigger_sources(record: LoraRecord) -> dict[str, str]:
+    """Return the retained source for each normalized trigger, without guessing."""
+    return {trigger.norm: trigger.source for trigger in record.triggers}
+
+
+def _confidence_for(a: str, b: str, sources_a: dict[str, str], sources_b: dict[str, str]) -> str:
+    if (sources_a.get(a, "").startswith("inferred") or sources_b.get(b, "").startswith("inferred")):
+        return "provisional"
+    return "heuristic"
+
+
+def _finding(kind: str, detail: str, a: str, b: str, sources_a: dict[str, str], sources_b: dict[str, str],
+             confidence: str, rationale: str) -> Finding:
+    evidence = []
+    if a:
+        evidence.append({"side": "a", "term": a, "source": sources_a.get(a, "trigger phrase")})
+    if b:
+        evidence.append({"side": "b", "term": b, "source": sources_b.get(b, "trigger phrase")})
+    return Finding(kind, detail, a, b, confidence, rationale, evidence)
 
 
 def matrix(records: list[LoraRecord], result: dict, limit: int = 40) -> dict:

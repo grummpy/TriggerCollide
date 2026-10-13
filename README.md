@@ -42,6 +42,10 @@ Where the trigger words come from, in order: a sidecar file next to the LoRA (`n
 (`10_mytoken style` → `mytoken style`), and finally a guess from the most frequent training tag
 (generic tags like `solo` are never guessed). Guessed triggers count for less.
 
+Collision findings retain the matched terms, their extraction source, and a confidence label in the app, JSON,
+and CSV export. `provisional` means a trigger was inferred from training tags; `heuristic` findings such as
+word overlap or shared tags need review rather than being treated as a verified trigger conflict.
+
 The base model comes from the tensor layout when the whole header is available (Flux block names, SD3 joint
 blocks, or the cross-attention width: 2048 = SDXL, 768 = SD 1.5, 1024 = SD 2). Otherwise it uses
 `modelspec.architecture`, then `ss_base_model_version`. Some trainers write `sd_1.5` for Flux LoRAs, so that

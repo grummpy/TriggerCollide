@@ -42,11 +42,17 @@ def build_result(records, stats, *, same_family_only: bool = True) -> dict:
 def collisions_csv(payload: dict) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["severity", "score", "lora_a", "file_a", "lora_b", "file_b", "findings"])
+    writer.writerow(["severity", "score", "lora_a", "file_a", "lora_b", "file_b", "findings", "evidence"])
     for col in payload["collisions"]:
         writer.writerow([col["severity"], col["score"], col["a_name"], col["a_file"], col["b_name"], col["b_file"],
-                         " | ".join(f["detail"] for f in col["findings"])])
+                         " | ".join(f["detail"] for f in col["findings"]),
+                         " | ".join(_evidence_text(f) for f in col["findings"])])
     return buffer.getvalue()
+
+
+def _evidence_text(finding: dict) -> str:
+    terms = ", ".join(f"{item['side']}:{item['term']} ({item['source']})" for item in finding.get("evidence", []))
+    return f"{finding.get('confidence', 'unknown')}: {terms}; {finding.get('rationale', '')}".strip()
 
 
 def counts_only(payload: dict) -> dict:

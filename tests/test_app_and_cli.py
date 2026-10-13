@@ -37,6 +37,8 @@ def test_api_demo_scan_workflow_and_exports(tmp_path):
     assert report["issue_counts"]["high"] >= 1
     csv = client.get(f"/api/scan/{scan['scan_id']}/collisions.csv")
     assert csv.status_code == 200 and csv.data.decode().startswith("severity,score")
+    assert "evidence" in csv.data.decode().splitlines()[0]
+    assert scan["collisions"][0]["findings"][0]["evidence"]
     assert client.get(f"/api/scan/{scan['scan_id']}.json").status_code == 200
     bad = client.post("/api/workflow/check", json={"scan_id": scan["scan_id"], "workflow": "{not json"})
     assert bad.status_code == 400

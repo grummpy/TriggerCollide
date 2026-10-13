@@ -118,7 +118,7 @@ function renderCollisions() {
   $("#col-list").innerHTML = rows.slice(0, 300).map((c) => `
     <li class="${c.severity}"><div><span class="sev ${c.severity}">${c.severity}</span><span class="pair">${esc(c.a_name)} ↔ ${esc(c.b_name)}</span>
     <span class="muted"> · ${c.score}</span></div>
-    ${c.findings.map((f) => `<div class="why">${esc(f.detail)}</div>`).join("")}
+    ${c.findings.map((f) => `<div class="why">${esc(f.detail)}<div class="muted">${esc(f.confidence || "unknown")} evidence${f.evidence?.length ? ": " + f.evidence.map((e) => `${e.side}:${e.term} (${e.source})`).map(esc).join(", ") : ""}${f.rationale ? " — " + esc(f.rationale) : ""}</div></div>`).join("")}
     ${c.shared_tags.length ? `<div class="why">Shared tags: ${c.shared_tags.slice(0, 8).map(esc).join(", ")}</div>` : ""}</li>`).join("")
     || '<li class="muted">No collisions match.</li>';
 }
